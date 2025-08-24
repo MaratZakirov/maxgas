@@ -2,12 +2,18 @@ import numpy as np
 import pygame
 import random
 import matplotlib.pyplot as plt
+from typing import Tuple, Optional
+from collections import defaultdict
+
+from sympy.utilities.mathml import apply_xsl
+from torch.serialization import safe_globals
 
 # Initialize Pygame
 pygame.init()
 
 # Screen dimensions
 WIDTH, HEIGHT = 600, 400
+GRID_SIZE = 10
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption('Bouncing Balls in a Box with Gravity')
 
@@ -45,7 +51,36 @@ class Particle:
         self.vx *= mag/nmag
         self.vy *= mag/nmag
 
-    def move(self):
+    # making address for collider matrix
+    def collide_address(self, safe_border=10.0) -> Optional[Tuple[int, int]]:
+        if self.x - safe_border < 0 or\
+           self.x + safe_border > WIDTH or\
+           self.y - safe_border < 0 or\
+           self.y + safe_border > HEIGHT:
+            return None
+        grid_x = self.x/GRID_SIZE
+        grid_y = self.y/GRID_SIZE
+        return grid_x, grid_y
+
+    @staticmethod
+    def process_collision(p1, p2) -> None:
+        v1 = np.array(p1.vx, p1.vy)
+        v2 = np.array(p2.vx, p2.vy)
+        x1 = np.array(p1.x, p1.y)
+        x2 = np.array(p2.x, p2.y)
+        m1 = p1.mass
+        m2 = p2.mass
+
+        n = (x2 - x1)/np.linalg.norm(x2 - x1)
+        v1_n = v1 - 2*(m2/(m1 + m2))*np.dot(v1 - v2, n)*n
+        v2_n = v2 - 2*(m1/(m1 + m2))*np.dot(v2 - v1, n)*n
+
+        p1.vx = v1_n[0]
+        p1.vy = v1_n[1]
+        p2.vx = v2_n[0]
+        p2.vy = v2_n[0]
+
+    def move(self) -> None:
         # Leapfrog integration:
         # Update position by full step using half-step velocity
         self.x += self.vx*self.dt
@@ -100,6 +135,7 @@ running = True
 data = []
 equ_ticks = 300 # equilibrium
 max_ticks = 400 # overall ticks
+COLLISION_PROBABILITY = 0.1
 cur_tick = 0
 
 while running:
@@ -117,13 +153,32 @@ while running:
     # Draw box border
     pygame.draw.rect(screen, BOX_COLOR, (0, 0, WIDTH, HEIGHT), 5)
 
+    # collision matrix initialization
+    collide_matrix = defaultdict(list)
+
     # Move and draw each ball
     for ball in balls:
         # first make system enter equilibrium state
         if cur_tick > equ_ticks:
             data.append([HEIGHT - ball.y, (ball.vx**2 + ball.vy**2)/2])
         ball.move()
+
+        # form collide matrix
+        address = ball.collide_address()
+        if address:
+            collide_matrix[address].append(ball)
+
         ball.draw(screen)
+
+    for address in collide_matrix:
+        if np.random.rand() < COLLISION_PROBABILITY:
+            # TODO make sure collision probability is properly set!
+            if len(collide_matrix[address]) >= 2:
+                two_balls = random.sample(collide_matrix[address], 2)
+
+                # only particles with different masses collision is useful
+                if two_balls[0].mass != two_balls[1].mass:
+                    Particle.process_collision(two_balls[0], two_balls[1])
 
     pygame.display.flip()
 
