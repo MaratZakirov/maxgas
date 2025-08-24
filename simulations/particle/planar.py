@@ -22,6 +22,7 @@ GRAVITY = 0.5
 
 class Particle:
     def __init__(self, x, y, radius, speed_x, speed_y, mass=1.0, dt=1.0):
+        self.whit = False
         self.mass = mass
         self.dt = dt
         self.x = x
@@ -31,16 +32,18 @@ class Particle:
         self.vy = speed_y
         self.E_init = self.mass*(HEIGHT - self.y)*GRAVITY + self.mass*0.5*(self.vx**2 + self.vy**2)
 
-    # Correct speed by initial energy
-    # TODO remove as it perfectly fine
-    def energy_correction(self):
-        #E_p = (HEIGHT - self.y) * GRAVITY
-        #E_k = 0.5 * (self.vx ** 2 + self.vy ** 2)
-        #coef = np.sqrt((self.E_init - E_p)/E_k)
-        #self.vx *= coef
-        #self.vy *= coef
+    # Check energy conservation
+    def check_particle_energy(self):
         E_cur = self.mass*(HEIGHT - self.y)*GRAVITY + self.mass*0.5*(self.vx**2 + self.vy**2)
         assert max(self.E_init, E_cur)/min(self.E_init, E_cur) < 1.001, f"E_init:{self.E_init} vs E_cur:{E_cur}"
+
+    def random_deflect(self):
+        mag = np.sqrt(self.vx**2 + self.vy**2)
+        self.vx += self.vx*np.clip(0.2*np.random.randn(), a_min=-0.3, a_max=0.3)
+        self.vy += self.vy*np.clip(0.2*np.random.randn(), a_min=-0.3, a_max=0.3)
+        nmag = np.sqrt(self.vx**2 + self.vy**2)
+        self.vx *= mag/nmag
+        self.vy *= mag/nmag
 
     def move(self):
         # Leapfrog integration:
@@ -49,33 +52,41 @@ class Particle:
         self.y += self.vy*self.dt + 0.5*GRAVITY*(self.dt**2)
         self.vy += GRAVITY*self.dt
 
+        if self.whit:
+            self.whit = False
+            self.random_deflect()
+
         # Boundary collision checks with walls (elastic bounce):
         # Left and right walls
         if self.x - self.radius < 0:
             self.x = self.radius
             self.vx = -self.vx
+            self.whit = True
         elif self.x + self.radius > WIDTH:
             self.x = WIDTH - self.radius
             self.vx = -self.vx
+            self.whit = True
 
         # Top wall
         if self.y - self.radius < 0:
             #self.y = self.radius
             self.vy = -self.vy
+            self.whit = True
 
         # Bottom wall
         if self.y + self.radius > HEIGHT:
             #self.y = HEIGHT - self.radius
             self.vy = -self.vy
+            self.whit = True
 
-        self.energy_correction()
+        self.check_particle_energy()
 
     def draw(self, screen):
         pygame.draw.circle(screen, BALL_COLOR, (int(self.x), int(self.y)), self.radius)
 
 # Create a list of balls with random starting positions and velocities
 balls = []
-for _ in range(1000):
+for _ in range(100):
     radius = 2
     x = random.randint(radius, WIDTH - radius)
     y = random.randint(int(0.8*HEIGHT), HEIGHT - 3*radius)  # Spawn higher so gravity effect is visible
@@ -87,7 +98,8 @@ clock = pygame.time.Clock()
 running = True
 
 data = []
-max_ticks = 200
+equ_ticks = 300 # equilibrium
+max_ticks = 400 # overall ticks
 cur_tick = 0
 
 while running:
@@ -107,7 +119,9 @@ while running:
 
     # Move and draw each ball
     for ball in balls:
-        data.append([HEIGHT - ball.y, (ball.vx**2 + ball.vy**2)/2])
+        # first make system enter equilibrium state
+        if cur_tick > equ_ticks:
+            data.append([HEIGHT - ball.y, (ball.vx**2 + ball.vy**2)/2])
         ball.move()
         ball.draw(screen)
 
