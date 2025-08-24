@@ -5,9 +5,6 @@ import matplotlib.pyplot as plt
 from typing import Tuple, Optional
 from collections import defaultdict
 
-from sympy.utilities.mathml import apply_xsl
-from torch.serialization import safe_globals
-
 # Initialize Pygame
 pygame.init()
 
@@ -20,7 +17,8 @@ pygame.display.set_caption('Bouncing Balls in a Box with Gravity')
 # Colors
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
-BALL_COLOR = (30, 144, 255)
+XENON_COLOR = (30, 144, 255)
+CRYPTON_COLOR = (255, 144, 30)
 BOX_COLOR = (105, 105, 105)
 
 # Gravity constant (pixels per frame squared)
@@ -29,6 +27,7 @@ GRAVITY = 0.5
 class Particle:
     def __init__(self, x, y, radius, speed_x, speed_y, mass=1.0, dt=1.0):
         self.whit = False
+        self.collided = False
         self.mass = mass
         self.dt = dt
         self.x = x
@@ -38,9 +37,13 @@ class Particle:
         self.vy = speed_y
         self.E_init = self.mass*(HEIGHT - self.y)*GRAVITY + self.mass*0.5*(self.vx**2 + self.vy**2)
 
-    # Check energy conservation
+    # get full particle energy
+    def full_particle_energy(self):
+        return self.mass * (HEIGHT - self.y) * GRAVITY + self.mass * 0.5 * (self.vx ** 2 + self.vy ** 2)
+
+    # Check energy conservation valid only in case with no collisions
     def check_particle_energy(self):
-        E_cur = self.mass*(HEIGHT - self.y)*GRAVITY + self.mass*0.5*(self.vx**2 + self.vy**2)
+        E_cur = self.full_particle_energy()
         assert max(self.E_init, E_cur)/min(self.E_init, E_cur) < 1.001, f"E_init:{self.E_init} vs E_cur:{E_cur}"
 
     def random_deflect(self):
@@ -52,22 +55,25 @@ class Particle:
         self.vy *= mag/nmag
 
     # making address for collider matrix
-    def collide_address(self, safe_border=10.0) -> Optional[Tuple[int, int]]:
+    def collide_address(self, safe_border=14.0) -> Optional[Tuple[int, int]]:
         if self.x - safe_border < 0 or\
            self.x + safe_border > WIDTH or\
            self.y - safe_border < 0 or\
            self.y + safe_border > HEIGHT:
             return None
-        grid_x = self.x/GRID_SIZE
-        grid_y = self.y/GRID_SIZE
+        grid_x = int(self.x)//GRID_SIZE
+        grid_y = int(self.y)//GRID_SIZE
         return grid_x, grid_y
 
     @staticmethod
     def process_collision(p1, p2) -> None:
-        v1 = np.array(p1.vx, p1.vy)
-        v2 = np.array(p2.vx, p2.vy)
-        x1 = np.array(p1.x, p1.y)
-        x2 = np.array(p2.x, p2.y)
+        E_p1_t0 = p1.full_particle_energy()
+        E_p2_t0 = p2.full_particle_energy()
+
+        v1 = np.array([p1.vx, p1.vy])
+        v2 = np.array([p2.vx, p2.vy])
+        x1 = np.array([p1.x, p1.y])
+        x2 = np.array([p2.x, p2.y])
         m1 = p1.mass
         m2 = p2.mass
 
@@ -78,7 +84,12 @@ class Particle:
         p1.vx = v1_n[0]
         p1.vy = v1_n[1]
         p2.vx = v2_n[0]
-        p2.vy = v2_n[0]
+        p2.vy = v2_n[1]
+
+        E_p1_t1 = p1.full_particle_energy()
+        E_p2_t1 = p2.full_particle_energy()
+
+        assert abs((E_p1_t0 + E_p2_t0) - (E_p1_t1 + E_p2_t1)) < 0.0001 * (E_p1_t0 + E_p2_t0), 'Energy is not conserved!'
 
     def move(self) -> None:
         # Leapfrog integration:
@@ -114,28 +125,30 @@ class Particle:
             self.vy = -self.vy
             self.whit = True
 
-        self.check_particle_energy()
+        #self.check_particle_energy()
 
     def draw(self, screen):
-        pygame.draw.circle(screen, BALL_COLOR, (int(self.x), int(self.y)), self.radius)
+        pygame.draw.circle(screen,
+                           XENON_COLOR if (self.mass > 1.0) else CRYPTON_COLOR,
+                           (int(self.x), int(self.y)), self.radius)
 
 # Create a list of balls with random starting positions and velocities
 balls = []
-for _ in range(100):
+for i in range(400):
     radius = 2
     x = random.randint(radius, WIDTH - radius)
     y = random.randint(int(0.8*HEIGHT), HEIGHT - 3*radius)  # Spawn higher so gravity effect is visible
     speed_x = 4*np.random.randn()
     speed_y = 4*np.random.randn()
-    balls.append(Particle(x, y, radius, speed_x, speed_y, mass=1.0, dt=1.0))
+    balls.append(Particle(x, y, radius, speed_x, speed_y, mass=0.8 if (i % 2 == 0) else 1.31, dt=1.0))
 
 clock = pygame.time.Clock()
 running = True
 
 data = []
-equ_ticks = 300 # equilibrium
-max_ticks = 400 # overall ticks
-COLLISION_PROBABILITY = 0.1
+equ_ticks = 400 # equilibrium
+max_ticks = 1000 # overall ticks
+COLLISION_PROBABILITY = 0.6
 cur_tick = 0
 
 while running:
@@ -160,7 +173,8 @@ while running:
     for ball in balls:
         # first make system enter equilibrium state
         if cur_tick > equ_ticks:
-            data.append([HEIGHT - ball.y, (ball.vx**2 + ball.vy**2)/2])
+            data.append([HEIGHT - ball.y, (ball.vx**2 + ball.vy**2)/2, ball.collided])
+        ball.collided = False
         ball.move()
 
         # form collide matrix
@@ -171,14 +185,19 @@ while running:
         ball.draw(screen)
 
     for address in collide_matrix:
-        if np.random.rand() < COLLISION_PROBABILITY:
-            # TODO make sure collision probability is properly set!
-            if len(collide_matrix[address]) >= 2:
-                two_balls = random.sample(collide_matrix[address], 2)
+        candidates = collide_matrix[address]
 
+        # essential part
+        pairs_num = int(len(candidates) * np.random.uniform(low=0, high=1.0) * COLLISION_PROBABILITY) // 2
+
+        if pairs_num > 0:
+            pairs = random.sample(candidates, 2*pairs_num)
+            for j in range(0, 2*pairs_num, 2):
                 # only particles with different masses collision is useful
-                if two_balls[0].mass != two_balls[1].mass:
-                    Particle.process_collision(two_balls[0], two_balls[1])
+                if pairs[j].mass != pairs[j+1].mass:
+                    Particle.process_collision(pairs[j], pairs[j+1])
+                    pairs[j].collided = True
+                    pairs[j+1].collided = True
 
     pygame.display.flip()
 
@@ -187,6 +206,7 @@ pygame.quit()
 data = np.array(data)
 h   = data[:, 0]
 E_k = data[:, 1]
+cld = data[:, 2]
 
 H_min = np.quantile(h, q=0.05)
 H_max = np.quantile(h, q=0.95)
@@ -196,7 +216,8 @@ E_k_refs = []
 for i in range(len(Levels)-1):
     E_k_refs.append(E_k[np.logical_and(h > Levels[i], h < Levels[i+1])].mean())
 
-plt.scatter(h, E_k, s=1.0)
+plt.scatter(h[cld == 0], E_k[cld == 0], s=1.0)
+plt.scatter(h[cld > 0], E_k[cld > 0], s=3.0, c='green')
 plt.plot(H_refs, E_k_refs, color='red')
 plt.scatter(H_refs, E_k_refs, c='red', s=3.0)
 plt.xlabel("Height")
