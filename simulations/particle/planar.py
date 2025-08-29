@@ -188,7 +188,7 @@ while running:
         candidates = collide_matrix[address]
 
         # essential part
-        pairs_num = int(len(candidates) * np.random.uniform(low=0, high=1.0) * COLLISION_PROBABILITY) // 2
+        pairs_num = int(len(candidates) * COLLISION_PROBABILITY) // 2
 
         if pairs_num > 0:
             pairs = random.sample(candidates, 2*pairs_num)
