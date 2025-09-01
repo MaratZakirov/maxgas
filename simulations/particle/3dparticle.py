@@ -1,19 +1,27 @@
 import matplotlib.pyplot as plt
-import numpy as np
 from matplotlib.animation import FuncAnimation
 import random
+import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
+from typing import List
 
-# particle number
+# Hypers
 N = 1000
 NX, NY, NZ = 400, 400, 400
 GRID_SIZE = 10
 GRAVITY = np.array([0, 0, -0.5])
 
+# Parameters
+step_num = 0
+STEPS = 2100
+detailed_steps = set(range(100)) | set(range(500, 550)) | set(range(2000, 2100))
+
 class Particles:
-    def __init__(self, PNUM: int, radius: float, dt: float):
+    def __init__(self, PNUM: int, radius: float, dt: float, m: List[float]):
         self.x = np.random.uniform(low=(0.1*NX, 0.1*NY, 0.1*NZ), high=(0.9*NX, 0.9*NY, 0.4*NZ), size=(PNUM, 3))
         self.v = 4*np.random.randn(PNUM, 3)
+        self.m = np.random.choice(m, size=PNUM)
+        self.color = [('r' if i == 1.0 else 'b') for i in self.m]
         self.radius = radius
         self.dt = dt
 
@@ -38,14 +46,14 @@ ax = fig.add_subplot(111, projection='3d')
 ax.set_aspect('equal')
 
 # Scatter plot initialization
-crypton = Particles(N, 2, 1.0)
-scatter = ax.scatter(crypton.x[:, 0], crypton.x[:, 1], crypton.x[:, 2], s=1.0)
+gas = Particles(N, 2, 1.0, m=[1.0, 1.31])
+scatter = ax.scatter(gas.x[:, 0], gas.x[:, 1], gas.x[:, 2], s=1.0, c=gas.color)
 
 # Update function to append new random points and redraw scatter plot
 def update(frame):
-    global scatter, crypton
+    global scatter, gas, step_num, anim
     ax.clear()
-    scatter = ax.scatter(crypton.x[:, 0], crypton.x[:, 1], crypton.x[:, 2], s=1.0)
+    scatter = ax.scatter(gas.x[:, 0], gas.x[:, 1], gas.x[:, 2], s=1.0, c=gas.color)
     ax.set_xlim(0, NX)
     ax.set_ylim(0, NY)
     ax.set_zlim(0, NZ)
@@ -53,7 +61,15 @@ def update(frame):
     ax.set_ylabel('Y')
     ax.set_zlabel('Z')
     ax.set_aspect('equal')
-    crypton.step()
+    fig.canvas.manager.set_window_title(f'Step num: {step_num}')
+
+    for i in range(10 - 9*int(step_num in detailed_steps)):
+        gas.step()
+        step_num += 1
+
+    if step_num > STEPS:
+        anim.event_source.stop()
+        plt.close(fig)
 
 # 60 fps
 anim = FuncAnimation(fig, update, interval=1000/60)
