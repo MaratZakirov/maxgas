@@ -22,10 +22,20 @@ class Particles:
     def __init__(self, PNUM: int, radius: float, dt: float, m: List[float]):
         self.x = np.random.uniform(low=(0.1*NX, 0.1*NY, 0.1*NZ), high=(0.9*NX, 0.9*NY, 0.4*NZ), size=(PNUM, 3))
         self.v = 4*np.random.randn(PNUM, 3)
-        self.m = np.random.choice(m, size=PNUM)
+        self.m = np.random.choice(m, size=(PNUM, 1))
         self.color = [('r' if i == 1.0 else 'b') for i in self.m]
         self.radius = radius
         self.dt = dt
+        self.E0 = self.get_system_full_energy()
+
+    def get_system_potential_energy(self) -> float:
+        return -(self.x * self.m * GRAVITY).sum()
+
+    def get_system_kinetic_energy(self) -> float:
+        return np.sum(self.m*(self.v ** 2)/2)
+
+    def get_system_full_energy(self):
+        return self.get_system_potential_energy() + self.get_system_kinetic_energy()
 
     def step(self) -> None:
         self.x += self.v*self.dt + 0.5*GRAVITY*(self.dt**2)
@@ -61,6 +71,10 @@ class Particles:
         # it could be done via Mask[1:] - Mask[-1:]
         ij = ij[~np.isin(ij[:, 0], ij[:, 1])]
 
+        E1 = self.get_system_full_energy()
+
+        assert (max(self.E0, E1) / min(self.E0, E1)) < 1.001, 'Energy diffrence is too huge'
+
         return ij
 
     def process_collisions(self, ij: np.ndarray):
@@ -68,8 +82,8 @@ class Particles:
         x2 = self.x[ij[:, 1]]
         v1 = np.copy(self.v[ij[:, 0]])
         v2 = np.copy(self.v[ij[:, 1]])
-        m1 = self.m[ij[:, 0], None]
-        m2 = self.m[ij[:, 1], None]
+        m1 = self.m[ij[:, 0]]
+        m2 = self.m[ij[:, 1]]
         n = (x2 - x1)/np.linalg.norm(x2 - x1, keepdims=True, axis=1)
         self.v[ij[:, 0]] = v1 - 2*(m2/(m1 + m2))*np.sum((v1 - v2)*n, keepdims=True, axis=1)*n
         self.v[ij[:, 1]] = v2 - 2*(m1/(m1 + m2))*np.sum((v2 - v1)*n, keepdims=True, axis=1)*n
