@@ -173,7 +173,7 @@ while running:
     for ball in balls:
         # first make system enter equilibrium state
         if cur_tick > equ_ticks:
-            data.append([HEIGHT - ball.y, (ball.vx**2 + ball.vy**2)/2, ball.collided])
+            data.append([HEIGHT - ball.y, ball.mass*(ball.vx**2 + ball.vy**2)/2, ball.collided])
         ball.collided = False
         ball.move()
 

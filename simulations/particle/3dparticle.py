@@ -6,27 +6,36 @@ import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
 from typing import List
 
+import matplotlib
+matplotlib.use('TkAgg')
+
 # Hypers
 N = 1000
 NX, NY, NZ = 400, 400, 400
-GRID_SIZE = 10
+GRID_SIZE = 5
 GRAVITY = np.array([0, 0, -0.5])
 
 # Parameters
-# TODO add warmup iterations without collisions
 step_num = 0
 STEPS = 2100
+# steps need system to reach equlibrium state
+EQU_STEPS = 400
 detailed_steps = set(range(100)) | set(range(500, 550)) | set(range(2000, 2100))
+COLLISION_PROBABILITY = 1.0
+
+# Data for further analysis
+data = []
 
 class Particles:
     def __init__(self, PNUM: int, radius: float, dt: float, m: List[float]):
         self.x = np.random.uniform(low=(0.1*NX, 0.1*NY, 0.1*NZ), high=(0.9*NX, 0.9*NY, 0.4*NZ), size=(PNUM, 3))
-        self.v = 4*np.random.randn(PNUM, 3)
+        self.v = 2.14*np.random.randn(PNUM, 3)
         self.m = np.random.choice(m, size=(PNUM, 1))
         self.color = [('r' if i == 1.0 else 'b') for i in self.m]
         self.radius = radius
         self.dt = dt
         self.E0 = self.get_system_full_energy()
+        self.collided = np.zeros(PNUM, dtype=bool)
 
     def get_system_potential_energy(self) -> float:
         return -(self.x * self.m * GRAVITY).sum()
@@ -65,6 +74,10 @@ class Particles:
         # apply Mask which indicates same address
         ij = np.stack([Idx[:-1, 1], Idx[1:, 1]], axis=1)[Mask]
 
+        # apply collision probability
+        np.random.shuffle(ij)
+        ij = ij[:int(len(ij) * COLLISION_PROBABILITY)]
+
         # check that each pair have right address
         assert (addr[ij[:, 0]] == addr[ij[:, 1]]).all(), 'Some pair has inconsistent address'
 
@@ -73,7 +86,7 @@ class Particles:
 
         E1 = self.get_system_full_energy()
 
-        assert (max(self.E0, E1) / min(self.E0, E1)) < 1.001, 'Energy diffrence is too huge'
+        assert (max(self.E0, E1) / min(self.E0, E1)) < 1.001, 'Energy difference is too huge'
 
         return ij
 
@@ -112,8 +125,16 @@ def update(frame):
 
     for i in range(10 - 9*int(step_num in detailed_steps)):
         gas.step()
+        gas.collided[:] = False
         collided_pairs = gas.find_collided_pairs()
         gas.process_collisions(collided_pairs)
+        gas.collided[collided_pairs[:, 0]] = True
+        gas.collided[collided_pairs[:, 1]] = True
+
+        # set some data for analysis
+        if step_num > EQU_STEPS:
+            data.append(np.stack([gas.x[:, 2], np.sum(gas.m*(gas.v ** 2) / 2, axis=1), gas.collided], axis=1))
+
         step_num += 1
 
     if step_num > STEPS:
@@ -121,5 +142,27 @@ def update(frame):
         plt.close(fig)
 
 # 60 fps
-anim = FuncAnimation(fig, update, interval=1000/60)
+anim = FuncAnimation(fig, update, interval=1000/60, cache_frame_data=False)
+plt.show()
+
+data = np.concatenate(data, axis=0)
+
+h   = data[:, 0]
+E_k = data[:, 1]
+cld = data[:, 2]
+
+H_min = np.quantile(h, q=0.05)
+H_max = np.quantile(h, q=0.95)
+Levels = np.linspace(start=H_min, stop=H_max, num=5)
+H_refs = 0.5 * (Levels[:-1] + Levels[1:])
+E_k_refs = []
+for i in range(len(Levels)-1):
+    E_k_refs.append(E_k[np.logical_and(h > Levels[i], h < Levels[i+1])].mean())
+
+plt.scatter(h[cld == 0], E_k[cld == 0], s=1.0)
+plt.scatter(h[cld > 0], E_k[cld > 0], s=3.0, c='green')
+plt.plot(H_refs, E_k_refs, color='red')
+plt.scatter(H_refs, E_k_refs, c='red', s=3.0)
+plt.xlabel("Height")
+plt.ylabel("Kinetic energy/Temperature")
 plt.show()
