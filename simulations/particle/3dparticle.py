@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 import random
 import numpy as np
-import pandas as pd
+#import pandas as pd
 from mpl_toolkits.mplot3d import Axes3D
 from typing import List
 
@@ -43,26 +43,36 @@ class Particles:
         Z_idx = np.logical_or(self.x[:, 2] < 0, self.x[:, 2] > NZ)
         self.v[Z_idx, 2] = -self.v[Z_idx, 2]
 
-    def find_collided_pairs(self):
+    def find_collided_pairs(self) -> np.ndarray:
         addr = (self.x // GRID_SIZE).astype(int)
         addr = addr[:, 0] + 100 * addr[:, 1] + 10000 * addr[:, 2]
-        addr = pd.Series(addr)
-        groups = addr.groupby(addr)
-        ij = []
 
-        # The idea is to form groups
-        # Then random shuffle each group
-        # Then truncate each group int(COLLISION_PROBABILITY * len(group))//2*2
-        # Then form one array make it reshape(-1, 2)
-        # Done process these pairs into process_collisions
+        Idx = np.stack([addr, np.arange(N)], axis=1)
+        np.random.shuffle(Idx)
+        Idx = Idx[np.argsort(Idx[:, 0])]
+        Mask = (Idx[:-1, 0] - Idx[1:, 0]) == 0
 
-        for g in groups.groups:
-            idx_s = groups.get_group(g)
-            if len(idx_s) > 0:
-                ij.append(0)
+        # apply Mask which indicates same address
+        ij = np.stack([Idx[:-1, 1], Idx[1:, 1]], axis=1)[Mask]
 
-    def process_collisions(self):
-        pass
+        # check that each pair have right address
+        assert (addr[ij[:, 0]] == addr[ij[:, 1]]).all(), 'Some pair has inconsistent address'
+
+        # it could be done via Mask[1:] - Mask[-1:]
+        ij = ij[~np.isin(ij[:, 0], ij[:, 1])]
+
+        return ij
+
+    def process_collisions(self, ij: np.ndarray):
+        x1 = self.x[ij[:, 0]]
+        x2 = self.x[ij[:, 1]]
+        v1 = np.copy(self.v[ij[:, 0]])
+        v2 = np.copy(self.v[ij[:, 1]])
+        m1 = self.m[ij[:, 0], None]
+        m2 = self.m[ij[:, 1], None]
+        n = (x2 - x1)/np.linalg.norm(x2 - x1, keepdims=True, axis=1)
+        self.v[ij[:, 0]] = v1 - 2*(m2/(m1 + m2))*np.sum((v1 - v2)*n, keepdims=True, axis=1)*n
+        self.v[ij[:, 1]] = v2 - 2*(m1/(m1 + m2))*np.sum((v2 - v1)*n, keepdims=True, axis=1)*n
 
 fig = plt.figure()
 ax = fig.add_subplot(111, projection='3d')
@@ -88,8 +98,8 @@ def update(frame):
 
     for i in range(10 - 9*int(step_num in detailed_steps)):
         gas.step()
-        gas.find_collided_pairs()
-        gas.process_collisions()
+        collided_pairs = gas.find_collided_pairs()
+        gas.process_collisions(collided_pairs)
         step_num += 1
 
     if step_num > STEPS:
