@@ -6,12 +6,11 @@ def standart_bolzman_formula_for_nitrogen(altitude, max_rho: float) -> np.ndarra
     return max_rho * np.exp(-0.0001147 * altitude)
 
 def neo_bolzman_formula_for_nitrogen(altitude, max_rho: float, T_0: float = 288.15) -> np.ndarray:
-    if 1:
+    if 0:
         val = (T_0-0.00943*altitude)**(5/2)
         return max_rho * val/val.max()
     else:
-        val = (1-0.0065*altitude/288.15)*(4.09)
-        return max_rho * val / val.max()
+        return max_rho * (1 - 2.18*(10**(-5))*altitude)**(4.09)
 
 # Create a regular altitude mesh from 0 to 10000 meters
 altitudes = np.arange(0.0, 10001.0, 1.0)
