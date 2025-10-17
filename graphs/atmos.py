@@ -4,10 +4,10 @@ import matplotlib.pyplot as plt
 import scipy.constants as physconsts
 
 # Create a regular altitude mesh from 0 to 10000 meters
-altitudes = np.arange(0.0, 10001.0, 1.0)
+alt = np.arange(0.0, 10001.0, 1.0)
 
 # Compute the atmosphere model, selecting density ('rho') as the variable
-ds = ussa1976.compute(z=altitudes, variables=["rho", "t"])
+ds = ussa1976.compute(z=alt, variables=["rho", "t"])
 
 # Specific heat for nitrogen
 c_p = 1040
@@ -57,15 +57,15 @@ def standart_bolzman(altitude) -> np.ndarray:
 plt.figure(dpi=100)
 
 # Plot the air density ('rho') against altitude ('z')
-plt.plot(altitudes, ds.rho, c='r')
+plt.plot(alt, ds.rho, c='r')
 
-standart_n = standart_bolzman(altitudes)
-n1 = formula(altitudes)
-n2 = formula2(altitudes)
+standart_n = standart_bolzman(alt)
+n1 = formula(alt)
+n2 = formula2(alt)
 
-plt.plot(altitudes, standart_n, c='b')
-plt.plot(altitudes, n1, c='g')
-plt.plot(altitudes, n2, c='y')
+plt.plot(alt, standart_n, c='b')
+plt.plot(alt, n1, c='g')
+plt.plot(alt, n2, c='y')
 
 # Add grid for better readability
 plt.grid(True)
