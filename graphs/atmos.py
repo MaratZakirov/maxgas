@@ -1,22 +1,57 @@
 import ussa1976
 import numpy as np
 import matplotlib.pyplot as plt
-
-def standart_bolzman_formula_for_nitrogen(altitude, max_rho: float) -> np.ndarray:
-    return max_rho * np.exp(-0.0001147 * altitude)
-
-def neo_bolzman_formula_for_nitrogen(altitude, max_rho: float, T_0: float = 288.15) -> np.ndarray:
-    if 0:
-        val = (T_0-0.00943*altitude)**(5/2)
-        return max_rho * val/val.max()
-    else:
-        return max_rho * (1 - 2.18*(10**(-5))*altitude)**(4.09)
+import scipy.constants as physconsts
 
 # Create a regular altitude mesh from 0 to 10000 meters
 altitudes = np.arange(0.0, 10001.0, 1.0)
 
 # Compute the atmosphere model, selecting density ('rho') as the variable
-ds = ussa1976.compute(z=altitudes, variables=["rho"])
+ds = ussa1976.compute(z=altitudes, variables=["rho", "t"])
+
+# Specific heat for nitrogen
+c_p = 1040
+
+# number of molecules at sea level
+n_0 = ds.rho.max().item()
+
+# temperature for sea level
+T_0 = ds.t.max().item() # k
+
+# gravitational
+g = 9.81 # m/s
+
+# R - constant
+R = 8.314 # J/mol/K
+
+# k - constant
+k = 1.38e-23
+
+# Avogadro
+N_A = physconsts.N_A
+
+# M for nitrogen
+M = 0.028 # kg/mol
+
+# m for nitrogen
+m = M/N_A
+
+# lapse rate
+alpha = 0.00649 # K/m
+
+# lapse rate
+alpha_calc = g/c_p # K/m
+
+print(M*g/alpha/R-1)
+
+def formula(altitude):
+    return n_0*(1 - alpha*altitude/T_0)**(M*g/alpha/R-1)
+
+def formula2(altitude):
+    return n_0*(1 - alpha_calc*altitude/T_0)**(M*g/alpha_calc/R-1)
+
+def standart_bolzman(altitude) -> np.ndarray:
+    return n_0*np.exp(-m * g * altitude / k / T_0)
 
 # Create a figure with a higher resolution
 plt.figure(dpi=100)
@@ -24,11 +59,13 @@ plt.figure(dpi=100)
 # Plot the air density ('rho') against altitude ('z')
 plt.plot(altitudes, ds.rho, c='r')
 
-bolzman_nitro_rho = standart_bolzman_formula_for_nitrogen(altitudes, max_rho=ds.rho.max().item())
-neo_nitro_rho = neo_bolzman_formula_for_nitrogen(altitudes, max_rho=ds.rho.max().item())
+standart_n = standart_bolzman(altitudes)
+n1 = formula(altitudes)
+n2 = formula2(altitudes)
 
-plt.plot(altitudes, bolzman_nitro_rho, c='b')
-plt.plot(altitudes, neo_nitro_rho, c='g')
+plt.plot(altitudes, standart_n, c='b')
+plt.plot(altitudes, n1, c='g')
+plt.plot(altitudes, n2, c='y')
 
 # Add grid for better readability
 plt.grid(True)
