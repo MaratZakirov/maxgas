@@ -8,6 +8,7 @@ alt = np.arange(0.0, 10001.0, 1.0)
 
 # Compute the atmosphere model, selecting density ('rho') as the variable
 ds = ussa1976.compute(z=alt, variables=["rho", "t"])
+ds_rho = np.array(ds.rho)
 
 # Specific heat for nitrogen
 c_p = 1040
@@ -57,7 +58,7 @@ def standart_bolzman(altitude) -> np.ndarray:
 plt.figure(dpi=100)
 
 # Plot the air density ('rho') against altitude ('z')
-plt.plot(alt, ds.rho, c='r')
+plt.plot(alt, ds_rho, c='r')
 
 standart_n = standart_bolzman(alt)
 n1 = formula(alt)
@@ -66,6 +67,10 @@ n2 = formula2(alt)
 plt.plot(alt, standart_n, c='b')
 plt.plot(alt, n1, c='g')
 plt.plot(alt, n2, c='y')
+
+for i in np.linspace(start=0, stop=len(alt)-1, num=12, dtype=int):
+    #print((alt[i]/1000).round(1), ' ',  ds_rho[i].round(2))
+    print((alt[i]/1000).round(2), ' ', standart_n[i].round(2))
 
 # Add grid for better readability
 plt.grid(True)
