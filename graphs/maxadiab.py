@@ -43,17 +43,21 @@ alpha = 0.00649 # K/m
 alpha_calc = g/c_p # K/m
 
 # Some other arrays for f_z(p, z) probability function
-z = np.linspace(start=0,stop=10000, num=100)
-p = m*np.linspace(start=0, stop=1200, num=100)
+z = np.linspace(start=0,stop=10, num=100)
+#p = np.linspace(start=0, stop=1.2*m, num=100)
+p = np.linspace(start=0, stop=5.6e-26, num=100)
 
 P, Z = np.meshgrid(p, z)
 
 def adiabatic(z):
-    return (M * g) / (T_0 * R) * (1 - (alpha / T_0) * z) ** ((M * g) / (alpha * R) - 1)
+    return (M * g) / (T_0 * R) * (1 - (alpha / T_0) * z * 1000) ** ((M * g) / (alpha * R) - 1)
 
 def maxwell(p, z):
-    T = (T_0 - alpha * z)
-    return 4 * np.pi * (2 * np.pi * m * k * T) ** (-3 / 2) * (p**2) * np.exp(-p ** 2 / (2 * m * k * T))
+    T = (T_0 - alpha * z * 1000)
+    return 4 * np.pi * (2 * np.pi * m * k * T) ** (-3 / 2) * ((p*1000)**2) * np.exp(-(p*1000) ** 2 / (2 * m * k * T))
+
+def f_z_long(p, z):
+    return 4 * np.pi * (2 * np.pi * m * k * (T_0 - alpha * z * 1000)) ** (-3 / 2) * ((p * 1000) ** 2) * np.exp(-(p * 1000) ** 2 / (2 * m * k * (T_0 - alpha * z * 1000))) * (M * g) / (T_0 * R) * (1 - (alpha / T_0) * z * 1000) ** ((M * g) / (alpha * R) - 1)
 
 def f_z(p, z):
     return maxwell(p, z) * adiabatic(z)
