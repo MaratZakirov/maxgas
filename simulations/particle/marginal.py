@@ -10,13 +10,14 @@ def f_inverse(x_arg, threshold):
     f_val = f_val / f_val.sum()
     return f_val
 
-def f_exponetial(x_arg):
+def f_exponetial(x_arg, x_0=0.):
     f_val = np.exp(-x_arg)
     f_val = f_val / f_val.sum()
+    f_val[x_arg < x_0] = 0
     return f_val
 
-z = np.linspace(start=0.0, stop=6, num=100)
-f_exp = f_exponetial(z)
+z = np.linspace(start=0.0, stop=6, num=200)
+f_exp = f_exponetial(z, 1.9)
 
 fig, axes = plt.subplots(3, 1, figsize=(5, 9), sharex=True)
 axes[0].plot(z, f_exp)
